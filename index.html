@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TTC Race Control</title>
+<style>
+:root{--bg:#0f1115;--card:#171a21;--line:#2a2f3a;--text:#f4f5f7;--muted:#9da5b4;--accent:#f59e0b;--good:#22c55e;--danger:#ef4444}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--text)}
+.wrap{max-width:1000px;margin:auto;padding:20px}.top{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:18px}
+h1,h2,h3{margin:0 0 8px}.sub{color:var(--muted);font-size:14px}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}.tab,button{border:1px solid var(--line);background:#20242d;color:var(--text);padding:11px 15px;border-radius:9px;cursor:pointer;font-weight:700}.tab.active,button.primary{background:var(--accent);color:#111;border-color:var(--accent)}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}input,select{width:100%;padding:12px;border-radius:9px;border:1px solid var(--line);background:#101319;color:var(--text);font-size:16px}
+.bigtime{font-size:clamp(48px,10vw,88px);font-variant-numeric:tabular-nums;text-align:center;font-weight:800;letter-spacing:1px;margin:18px 0}
+.actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}.pen{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-top:14px}.pen button{min-height:54px}
+.stat{font-size:24px;font-weight:800}.muted{color:var(--muted)}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;border-bottom:1px solid var(--line)}th{color:var(--muted);font-size:13px}
+.hidden{display:none}.pill{display:inline-block;padding:5px 9px;border-radius:99px;background:#242a34;font-size:12px}.danger{background:#3a171a;color:#fecaca}.success{background:#15351f;color:#bbf7d0}
+.notice{padding:12px;border-radius:10px;background:#211b0d;border:1px solid #5c4514;color:#fbd38d;font-size:13px}
+@media(max-width:560px){.wrap{padding:12px}.panel{padding:14px}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <div class="top">
+    <div><h1>🏁 TTC Race Control</h1><div class="sub">Online timer & scoring prototype</div></div>
+    <span class="pill" id="modePill">ROCK CRAWLING</span>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="marshal">Marshal Timer</button>
+    <button class="tab" data-tab="admin">Competition Setup</button>
+    <button class="tab" data-tab="results">Live Results</button>
+  </div>
+
+  <section id="marshal">
+    <div class="panel">
+      <h2>Marshal Run</h2>
+      <div class="grid">
+        <div><label>Mode</label><select id="mode"><option value="crawling">Rock Crawling</option><option value="timeattack">Time Attack</option></select></div>
+        <div><label>Driver</label><select id="driver"></select></div>
+        <div><label>Course</label><select id="course"></select></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="bigtime" id="timer">00:00.00</div>
+      <div class="actions">
+        <button class="primary" id="start">START</button>
+        <button id="finish" disabled>FINISH</button>
+        <button id="reset">RESET</button>
+      </div>
+      <div class="grid" style="margin-top:18px">
+        <div><div class="muted">Raw Time</div><div class="stat" id="raw">00:00.00</div></div>
+        <div><div class="muted" id="penLabel">Penalty Points</div><div class="stat" id="penaltyTotal">0</div></div>
+        <div><div class="muted">Result</div><div class="stat" id="final">00:00.00</div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Penalties</h3>
+      <div class="pen" id="penalties"></div>
+      <div class="notice" style="margin-top:12px">Rules are editable in Competition Setup. Current changes are stored locally in this prototype.</div>
+    </div>
+
+    <div class="panel actions">
+      <button class="primary" id="submit" disabled>CONFIRM & SUBMIT RUN</button>
+    </div>
+  </section>
+
+  <section id="admin" class="hidden">
+    <div class="panel">
+      <h2>Competition Setup</h2>
+      <div class="grid">
+        <div><label>Event Name</label><input id="eventName" value="TTC Race Control Demo"></div>
+        <div><label>Default Mode</label><select id="adminMode"><option value="crawling">Rock Crawling</option><option value="timeattack">Time Attack</option></select></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Drivers</h3>
+      <div class="grid">
+        <div><label>Driver Name</label><input id="newDriver" placeholder="e.g. Jan Vincent"></div>
+        <div><label>Class</label><input id="newClass" placeholder="e.g. C2"></div>
+        <div style="display:flex;align-items:end"><button class="primary" id="addDriver">ADD DRIVER</button></div>
+      </div>
+      <div id="driverList" style="margin-top:14px"></div>
+    </div>
+    <div class="panel">
+      <h3>Courses</h3>
+      <div class="grid">
+        <div><label>Course Name</label><input id="newCourse" placeholder="e.g. Course 1"></div>
+        <div style="display:flex;align-items:end"><button class="primary" id="addCourse">ADD COURSE</button></div>
+      </div>
+      <div id="courseList" style="margin-top:14px"></div>
+    </div>
+    <div class="panel">
+      <h3>Editable Penalty Rules</h3>
+      <div class="grid" id="ruleInputs"></div>
+      <div style="margin-top:12px"><button class="primary" id="saveRules">SAVE RULES</button></div>
+    </div>
+  </section>
+
+  <section id="results" class="hidden">
+    <div class="panel">
+      <h2>Live Results</h2>
+      <div class="sub">Crawling: lowest points first; time breaks equal points. Time Attack: lowest final time first.</div>
+      <div style="overflow:auto;margin-top:12px"><table><thead><tr><th>Rank</th><th>Driver</th><th>Course</th><th>Mode</th><th>Raw</th><th>Penalty</th><th>Result</th></tr></thead><tbody id="resultsBody"></tbody></table></div>
+    </div>
+  </section>
+</div>
+
+<script>
+const state={
+ mode:"crawling", running:false, startMs:0, raf:null, rawMs:0, penalties:[],
+ drivers:[{id:"D1",name:"Demo Driver",className:"C2"}],
+ courses:[{id:"C1",name:"Course 1"},{id:"C2",name:"Course 2"}],
+ results:[],
+ rules:{
+  crawling:[
+   {id:"reverse",name:"Reverse",value:1,unit:"pts"},
+   {id:"boundary",name:"Boundary",value:10,unit:"pts"},
+   {id:"gate",name:"Gate Penalty",value:10,unit:"pts"},
+   {id:"rollover",name:"Rollover",value:10,unit:"pts"},
+   {id:"winch",name:"Winch",value:5,unit:"pts"}
+  ],
+  timeattack:[
+   {id:"boundary",name:"Boundary Hit",value:10,unit:"sec"},
+   {id:"obstacle",name:"Obstacle Hit",value:5,unit:"sec"},
+   {id:"wronggate",name:"Wrong Gate",value:20,unit:"sec"},
+   {id:"reverse",name:"Reverse",value:5,unit:"sec"}
+  ]
+ }
+};
+const $=id=>document.getElementById(id);
+function fmt(ms){let m=Math.floor(ms/60000),s=Math.floor(ms%60000/1000),c=Math.floor(ms%1000/10);return `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}.${String(c).padStart(2,"0")}`}
+function currentRules(){return state.rules[state.mode]}
+function renderSelects(){
+ $("driver").innerHTML=state.drivers.map(d=>`<option value="${d.id}">${d.name} — ${d.className}</option>`).join("");
+ $("course").innerHTML=state.courses.map(c=>`<option value="${c.id}">${c.name}</option>`).join("");
+ renderLists(); renderRules(); renderPenalties();
+}
+function renderLists(){
+ $("driverList").innerHTML=state.drivers.map(d=>`<div class="pill" style="margin:3px">${d.name} (${d.className})</div>`).join("");
+ $("courseList").innerHTML=state.courses.map(c=>`<div class="pill" style="margin:3px">${c.name}</div>`).join("");
+}
+function renderRules(){
+ $("ruleInputs").innerHTML=currentRules().map((r,i)=>`<div><label>${r.name} (${r.unit})</label><input type="number" min="0" data-rule="${i}" value="${r.value}"></div>`).join("");
+}
+function renderPenalties(){
+ $("penalties").innerHTML=currentRules().map((r,i)=>`<button type="button" data-pen="${i}">${r.name}<br>+${r.value} ${r.unit}</button>`).join("");
+}
+function setMode(mode){
+ state.mode=mode;$("mode").value=mode;$("adminMode").value=mode;$("modePill").textContent=mode==="crawling"?"ROCK CRAWLING":"TIME ATTACK";
+ $("penLabel").textContent=mode==="crawling"?"Penalty Points":"Penalty Time (sec)";
+ state.penalties=[];updateNumbers();renderRules();renderPenalties();
+}
+function updateNumbers(){
+ let pen=state.penalties.reduce((a,p)=>a+p.amount,0);
+ $("penaltyTotal").textContent=state.mode==="crawling"?pen:`+${pen}s`;
+ $("raw").textContent=fmt(state.rawMs);
+ $("final").textContent=state.mode==="crawling"?fmt(state.rawMs):fmt(state.rawMs+pen*1000);
+}
+function tick(){state.rawMs=performance.now()-state.startMs;$("timer").textContent=fmt(state.rawMs);updateNumbers();if(state.running)state.raf=requestAnimationFrame(tick)}
+$("mode").addEventListener("change",e=>setMode(e.target.value));
+$("adminMode").addEventListener("change",e=>setMode(e.target.value));
+$("start").addEventListener("click",()=>{if(state.running)return;state.running=true;state.startMs=performance.now();state.rawMs=0;state.penalties=[];$("start").disabled=true;$("finish").disabled=false;$("submit").disabled=true;tick()});
+$("finish").addEventListener("click",()=>{if(!state.running)return;state.running=false;cancelAnimationFrame(state.raf);state.rawMs=performance.now()-state.startMs;$("timer").textContent=fmt(state.rawMs);$("finish").disabled=true;$("submit").disabled=false;updateNumbers()});
+$("reset").addEventListener("click",()=>{state.running=false;cancelAnimationFrame(state.raf);state.rawMs=0;state.penalties=[];$("timer").textContent="00:00.00";$("start").disabled=false;$("finish").disabled=true;$("submit").disabled=true;updateNumbers()});
+$("penalties").addEventListener("click",e=>{const b=e.target.closest("[data-pen]");if(!b||state.running===false)return;const r=currentRules()[+b.dataset.pen];state.penalties.push({id:r.id,name:r.name,amount:Number(r.value)});updateNumbers()});
+$("submit").addEventListener("click",()=>{
+ const driver=state.drivers.find(d=>d.id===$("driver").value),course=state.courses.find(c=>c.id===$("course").value);
+ const pen=state.penalties.reduce((a,p)=>a+p.amount,0);
+ state.results.push({driver:driver.name,course:course.name,mode:state.mode,raw:state.rawMs,pen,final:state.mode==="crawling"?state.rawMs:state.rawMs+pen*1000,points:state.mode==="crawling"?pen:0});
+ renderResults(); $("submit").disabled=true; $("start").disabled=false;
+});
+$("addDriver").addEventListener("click",()=>{let n=$("newDriver").value.trim(),c=$("newClass").value.trim()||"Open";if(!n)return;state.drivers.push({id:"D"+Date.now(),name:n,className:c});$("newDriver").value="";$("newClass").value="";renderSelects()});
+$("addCourse").addEventListener("click",()=>{let n=$("newCourse").value.trim();if(!n)return;state.courses.push({id:"C"+Date.now(),name:n});$("newCourse").value="";renderSelects()});
+$("saveRules").addEventListener("click",()=>{document.querySelectorAll("[data-rule]").forEach(inp=>{let i=+inp.dataset.rule,v=Math.max(0,Number(inp.value)||0);currentRules()[i].value=v});renderPenalties();updateNumbers();alert("Rules saved for this prototype.")});
+function renderResults(){
+ let arr=[...state.results];
+ if(state.mode==="crawling")arr.sort((a,b)=>(a.points-b.points)||(a.final-b.final));else arr.sort((a,b)=>a.final-b.final);
+ $("resultsBody").innerHTML=arr.map((r,i)=>`<tr><td>${i+1}</td><td>${r.driver}</td><td>${r.course}</td><td>${r.mode==="crawling"?"Crawling":"Time Attack"}</td><td>${fmt(r.raw)}</td><td>${r.mode==="crawling"?r.points+" pts":"+"+r.pen+" sec"}</td><td><b>${fmt(r.final)}</b></td></tr>`).join("");
+}
+document.querySelectorAll(".tab").forEach(btn=>btn.addEventListener("click",()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));btn.classList.add("active");["marshal","admin","results"].forEach(id=>$(id).classList.toggle("hidden",id!==btn.dataset.tab))}));
+renderSelects();updateNumbers();
+</script>
+</body>
+</html>

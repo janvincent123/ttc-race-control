@@ -10,22 +10,24 @@
 .wrap{max-width:1000px;margin:auto;padding:20px}.top{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:18px}
 h1,h2,h3{margin:0 0 8px}.sub{color:var(--muted);font-size:14px}
 .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}.tab,button{border:1px solid var(--line);background:#20242d;color:var(--text);padding:11px 15px;border-radius:9px;cursor:pointer;font-weight:700}.tab.active,button.primary{background:var(--accent);color:#111;border-color:var(--accent)}
-.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:14px}
+button:disabled{opacity:.45;cursor:not-allowed}.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:14px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
 label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}input,select{width:100%;padding:12px;border-radius:9px;border:1px solid var(--line);background:#101319;color:var(--text);font-size:16px}
 .bigtime{font-size:clamp(48px,10vw,88px);font-variant-numeric:tabular-nums;text-align:center;font-weight:800;letter-spacing:1px;margin:18px 0}
 .actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}.pen{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-top:14px}.pen button{min-height:54px}
 .stat{font-size:24px;font-weight:800}.muted{color:var(--muted)}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;border-bottom:1px solid var(--line)}th{color:var(--muted);font-size:13px}
-.hidden{display:none}.pill{display:inline-block;padding:5px 9px;border-radius:99px;background:#242a34;font-size:12px}.danger{background:#3a171a;color:#fecaca}.success{background:#15351f;color:#bbf7d0}
+.hidden{display:none}.pill{display:inline-block;padding:5px 9px;border-radius:99px;background:#242a34;font-size:12px}.success{background:#15351f;color:#bbf7d0}.danger{background:#3a171a;color:#fecaca}
 .notice{padding:12px;border-radius:10px;background:#211b0d;border:1px solid #5c4514;color:#fbd38d;font-size:13px}
+.cloud{font-size:12px;padding:6px 9px;border-radius:99px;background:#242a34}.cloud.ok{background:#15351f;color:#bbf7d0}.cloud.bad{background:#3a171a;color:#fecaca}
+.listrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
 @media(max-width:560px){.wrap{padding:12px}.panel{padding:14px}}
 </style>
 </head>
 <body>
 <div class="wrap" id="app">
   <div class="top">
-    <div><h1>🏁 TTC Race Control</h1><div class="sub">Online timer & scoring prototype</div></div>
-    <span class="pill" id="modePill">ROCK CRAWLING</span>
+    <div><h1>🏁 TTC Race Control</h1><div class="sub">Online timer & scoring system</div></div>
+    <div><span class="cloud" id="cloudStatus">Connecting...</span> <span class="pill" id="modePill">ROCK CRAWLING</span></div>
   </div>
 
   <div class="tabs">
@@ -65,9 +67,7 @@ label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}input,se
       <div class="notice" style="margin-top:12px">PAUSE stops the race clock without adding the paused duration to the recorded time. Use it for an official race interruption/problem. Resume continues the same run.</div>
     </div>
 
-    <div class="panel actions">
-      <button class="primary" id="submit" disabled>CONFIRM & SUBMIT RUN</button>
-    </div>
+    <div class="panel actions"><button class="primary" id="submit" disabled>CONFIRM & SUBMIT RUN</button></div>
   </section>
 
   <section id="admin" class="hidden">
@@ -77,7 +77,13 @@ label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}input,se
         <div><label>Event Name</label><input id="eventName" value="TTC Race Control Demo"></div>
         <div><label>Default Mode</label><select id="adminMode"><option value="crawling">Rock Crawling</option><option value="timeattack">Time Attack</option></select></div>
       </div>
+      <div class="actions" style="margin-top:14px;justify-content:flex-start">
+        <button class="primary" id="saveEvent">SAVE EVENT TO CLOUD</button>
+        <button id="reloadCloud">RELOAD CLOUD DATA</button>
+      </div>
+      <div class="sub" id="eventStatus" style="margin-top:10px">Event not loaded yet.</div>
     </div>
+
     <div class="panel">
       <h3>Drivers</h3>
       <div class="grid">
@@ -87,6 +93,7 @@ label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}input,se
       </div>
       <div id="driverList" style="margin-top:14px"></div>
     </div>
+
     <div class="panel">
       <h3>Courses</h3>
       <div class="grid">
@@ -95,10 +102,11 @@ label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}input,se
       </div>
       <div id="courseList" style="margin-top:14px"></div>
     </div>
+
     <div class="panel">
       <h3>Editable Penalty Rules</h3>
       <div class="grid" id="ruleInputs"></div>
-      <div style="margin-top:12px"><button class="primary" id="saveRules">SAVE RULES</button></div>
+      <div style="margin-top:12px"><button class="primary" id="saveRules">SAVE RULES TO CLOUD</button></div>
     </div>
   </section>
 
@@ -111,12 +119,16 @@ label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}input,se
   </section>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
+const SUPABASE_URL="https://dclupkyzrjlphjyrdmat.supabase.co";
+const SUPABASE_KEY="sb_publishable_FGwlbQR57c_w51AUX4ccLg_qVQUzj9Y";
+const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+
 const state={
+ event:null, ruleVersion:null,
  mode:"crawling", running:false, paused:false, pauseStartedMs:0, pausedMs:0, startMs:0, raf:null, rawMs:0, penalties:[],
- drivers:[{id:"D1",name:"Demo Driver",className:"C2"}],
- courses:[{id:"C1",name:"Course 1"},{id:"C2",name:"Course 2"}],
- results:[],
+ drivers:[], courses:[], results:[],
  rules:{
   crawling:[
    {id:"reverse",name:"Reverse",value:1,unit:"pts"},
@@ -134,16 +146,18 @@ const state={
  }
 };
 const $=id=>document.getElementById(id);
-function fmt(ms){let m=Math.floor(ms/60000),s=Math.floor(ms%60000/1000),c=Math.floor(ms%1000/10);return `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}.${String(c).padStart(2,"0")}`}
-function currentRules(){return state.rules[state.mode]}
+const fmt=ms=>{let m=Math.floor(ms/60000),s=Math.floor(ms%60000/1000),c=Math.floor(ms%1000/10);return `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}.${String(c).padStart(2,"0")}`};
+const currentRules=()=>state.rules[state.mode];
+
+function cloudStatus(ok,msg){$("cloudStatus").textContent=msg;$("cloudStatus").className="cloud "+(ok?"ok":"bad")}
 function renderSelects(){
- $("driver").innerHTML=state.drivers.map(d=>`<option value="${d.id}">${d.name} — ${d.className}</option>`).join("");
- $("course").innerHTML=state.courses.map(c=>`<option value="${c.id}">${c.name}</option>`).join("");
- renderLists(); renderRules(); renderPenalties();
+ $("driver").innerHTML=state.drivers.length?state.drivers.map(d=>`<option value="${d.id}">${d.name} — ${d.className||""}</option>`).join(""):`<option value="">No drivers yet</option>`;
+ $("course").innerHTML=state.courses.length?state.courses.map(c=>`<option value="${c.id}">${c.name}</option>`).join(""):`<option value="">No courses yet</option>`;
+ renderLists();renderRules();renderPenalties();
 }
 function renderLists(){
- $("driverList").innerHTML=state.drivers.map(d=>`<div class="pill" style="margin:3px">${d.name} (${d.className})</div>`).join("");
- $("courseList").innerHTML=state.courses.map(c=>`<div class="pill" style="margin:3px">${c.name}</div>`).join("");
+ $("driverList").innerHTML=state.drivers.length?state.drivers.map(d=>`<div class="pill" style="margin:3px">${d.name} (${d.className||"Open"})</div>`).join(""):"<span class='muted'>No drivers yet.</span>";
+ $("courseList").innerHTML=state.courses.length?state.courses.map(c=>`<div class="pill" style="margin:3px">${c.name} — ${c.mode}</div>`).join(""):"<span class='muted'>No courses yet.</span>";
 }
 function renderRules(){
  $("ruleInputs").innerHTML=currentRules().map((r,i)=>`<div><label>${r.name} (${r.unit})</label><input type="number" min="0" data-rule="${i}" value="${r.value}"></div>`).join("");
@@ -157,80 +171,116 @@ function setMode(mode){
  state.penalties=[];updateNumbers();renderRules();renderPenalties();
 }
 function updateNumbers(){
- let pen=state.penalties.reduce((a,p)=>a+p.amount,0);
+ const pen=state.penalties.reduce((a,p)=>a+p.amount,0);
  $("penaltyTotal").textContent=state.mode==="crawling"?pen:`+${pen}s`;
  $("raw").textContent=fmt(state.rawMs);
  $("final").textContent=state.mode==="crawling"?fmt(state.rawMs):fmt(state.rawMs+pen*1000);
 }
 function tick(){
-  if(!state.running || state.paused) return;
-  state.rawMs=performance.now()-state.startMs-state.pausedMs;
-  $("timer").textContent=fmt(state.rawMs);
-  updateNumbers();
-  state.raf=requestAnimationFrame(tick)
+ if(!state.running||state.paused)return;
+ state.rawMs=performance.now()-state.startMs-state.pausedMs;
+ $("timer").textContent=fmt(state.rawMs);updateNumbers();state.raf=requestAnimationFrame(tick);
+}
+async function ensureEvent(){
+ let name=$("eventName").value.trim()||"TTC Race Control Demo";
+ let {data,error}=await db.from("events").select("*").eq("name",name).order("created_at",{ascending:true}).limit(1).maybeSingle();
+ if(error)throw error;
+ if(!data){let r=await db.from("events").insert({name,status:"setup"}).select().single();if(r.error)throw r.error;data=r.data;}
+ state.event=data;$("eventStatus").textContent=`Cloud event: ${data.name}`;
+}
+async function loadCloud(){
+ try{
+  cloudStatus(false,"Connecting...");
+  await ensureEvent();
+  const eid=state.event.id;
+  const [cls,drv,cou,rv,runs]=await Promise.all([
+   db.from("classes").select("*").eq("event_id",eid).order("created_at"),
+   db.from("drivers").select("*").eq("event_id",eid).order("created_at"),
+   db.from("courses").select("*").eq("event_id",eid).order("course_number"),
+   db.from("scoring_rule_versions").select("*").eq("event_id",eid).order("version_number",{ascending:false}).limit(10),
+   db.from("runs").select("*,drivers(name),courses(name)").eq("event_id",eid).order("created_at",{ascending:false})
+  ]);
+  for(const x of [cls,drv,cou,rv,runs])if(x.error)throw x.error;
+  state.drivers=drv.data.map(d=>({id:d.id,name:d.name,className:(cls.data.find(c=>c.id===d.class_id)||{}).name||"Open",class_id:d.class_id}));
+  state.courses=cou.data.map(c=>({id:c.id,name:c.name,mode:c.mode,time_limit_seconds:c.time_limit_seconds}));
+  const latest={crawling:rv.data.find(x=>x.mode==="crawling"),timeattack:rv.data.find(x=>x.mode==="timeattack")};
+  for(const mode of ["crawling","timeattack"])if(latest[mode]&&latest[mode].rules)state.rules[mode]=latest[mode].rules;
+  state.results=runs.data.map(r=>({id:r.id,driver:r.drivers?.name||"Unknown",course:r.courses?.name||"Unknown",mode:r.mode,raw:Number(r.raw_time_ms||0),pen:Number(r.penalty_points||r.penalty_time_seconds||0),final:Number(r.final_time_ms||0),points:Number(r.points||0)}));
+  state.ruleVersion=latest[state.mode]||null;
+  renderSelects();renderResults();cloudStatus(true,"Cloud connected");
+ }catch(e){console.error(e);cloudStatus(false,"Cloud error");$("eventStatus").textContent="Cloud error: "+e.message}
+}
+async function saveEvent(){
+ try{
+  const name=$("eventName").value.trim();if(!name)return alert("Enter an event name.");
+  if(!state.event){await ensureEvent()}else{const {data,error}=await db.from("events").update({name}).eq("id",state.event.id).select().single();if(error)throw error;state.event=data;}
+  $("eventStatus").textContent=`Saved: ${state.event.name}`;await loadCloud();alert("Event saved to Supabase.");
+ }catch(e){alert("Save event failed: "+e.message)}
+}
+async function addDriverCloud(){
+ try{
+  const n=$("newDriver").value.trim(),cn=$("newClass").value.trim()||"Open";if(!n)return;
+  await ensureEvent();
+  let {data:cl,error}=await db.from("classes").select("*").eq("event_id",state.event.id).eq("name",cn).maybeSingle();if(error)throw error;
+  if(!cl){let r=await db.from("classes").insert({event_id:state.event.id,name:cn}).select().single();if(r.error)throw r.error;cl=r.data;}
+  const r=await db.from("drivers").insert({event_id:state.event.id,driver_number:String(state.drivers.length+1),name:n,class_id:cl.id}).select().single();if(r.error)throw r.error;
+  $("newDriver").value="";$("newClass").value="";await loadCloud();
+ }catch(e){alert("Add driver failed: "+e.message)}
+}
+async function addCourseCloud(){
+ try{
+  const n=$("newCourse").value.trim();if(!n)return;
+  await ensureEvent();
+  const num=state.courses.length+1;
+  const r=await db.from("courses").insert({event_id:state.event.id,name:n,course_number:num,mode:state.mode,time_limit_seconds:null}).select().single();if(r.error)throw r.error;
+  $("newCourse").value="";await loadCloud();
+ }catch(e){alert("Add course failed: "+e.message)}
+}
+async function saveRulesCloud(){
+ try{
+  await ensureEvent();
+  document.querySelectorAll("[data-rule]").forEach(inp=>{const i=+inp.dataset.rule;currentRules()[i].value=Math.max(0,Number(inp.value)||0)});
+  const mode=state.mode;
+  const latest=await db.from("scoring_rule_versions").select("version_number").eq("event_id",state.event.id).eq("mode",mode).order("version_number",{ascending:false}).limit(1).maybeSingle();
+  if(latest.error)throw latest.error;
+  const version=(latest.data?.version_number||0)+1;
+  const r=await db.from("scoring_rule_versions").insert({event_id:state.event.id,mode,version_number:version,rules:currentRules(),is_active:true}).select().single();if(r.error)throw r.error;
+  state.ruleVersion=r.data;renderPenalties();updateNumbers();alert("Rules saved to Supabase.");
+ }catch(e){alert("Save rules failed: "+e.message)}
+}
+async function submitRun(){
+ try{
+  const driver=state.drivers.find(d=>d.id===$("driver").value),course=state.courses.find(c=>c.id===$("course").value);
+  if(!driver||!course)return alert("Select a driver and course.");
+  const pen=state.penalties.reduce((a,p)=>a+p.amount,0);
+  const final=state.mode==="crawling"?state.rawMs:state.rawMs+pen*1000;
+  const payload={event_id:state.event.id,driver_id:driver.id,course_id:course.id,class_id:driver.class_id||null,mode:state.mode,started_at:new Date(Date.now()-state.rawMs).toISOString(),finished_at:new Date().toISOString(),raw_time_ms:Math.round(state.rawMs),points:state.mode==="crawling"?pen:0,penalty_points:state.mode==="crawling"?pen:0,bonus_points:0,penalty_time_seconds:state.mode==="timeattack"?pen:0,final_time_ms:Math.round(final),penalties:state.penalties,rule_version_id:state.ruleVersion?.id||null,marshal_name:"Marshal",status:"submitted"};
+  const r=await db.from("runs").upsert(payload,{onConflict:"driver_id,course_id"}).select().single();if(r.error)throw r.error;
+  alert("Run submitted to cloud.");
+  await loadCloud();$("submit").disabled=true;$("start").disabled=false;
+ }catch(e){alert("Submit failed: "+e.message)}
 }
 $("mode").addEventListener("change",e=>setMode(e.target.value));
 $("adminMode").addEventListener("change",e=>setMode(e.target.value));
-$("start").addEventListener("click",()=>{
-  if(state.running)return;
-  state.running=true; state.paused=false; state.pauseStartedMs=0; state.pausedMs=0;
-  state.startMs=performance.now(); state.rawMs=0; state.penalties=[];
-  $("start").disabled=true; $("pause").disabled=false; $("finish").disabled=false; $("submit").disabled=true;
-  $("pause").textContent="PAUSE"; tick();
-});
-$("pause").addEventListener("click",()=>{
-  if(!state.running)return;
-  if(!state.paused){
-    state.paused=true;
-    state.pauseStartedMs=performance.now();
-    cancelAnimationFrame(state.raf);
-    $("pause").textContent="RESUME";
-    $("finish").disabled=true;
-  }else{
-    state.paused=false;
-    state.pausedMs += performance.now()-state.pauseStartedMs;
-    state.pauseStartedMs=0;
-    $("pause").textContent="PAUSE";
-    $("finish").disabled=false;
-    tick();
-  }
-});
-$("finish").addEventListener("click",()=>{
-  if(!state.running || state.paused)return;
-  state.running=false; cancelAnimationFrame(state.raf);
-  state.rawMs=performance.now()-state.startMs-state.pausedMs;
-  $("timer").textContent=fmt(state.rawMs);
-  $("pause").disabled=true; $("finish").disabled=true; $("submit").disabled=false; updateNumbers()
-});
-$("reset").addEventListener("click",()=>{
-  state.running=false; state.paused=false; state.pauseStartedMs=0; state.pausedMs=0;
-  cancelAnimationFrame(state.raf); state.rawMs=0; state.penalties=[];
-  $("timer").textContent="00:00.00"; $("start").disabled=false; $("pause").disabled=true;
-  $("pause").textContent="PAUSE"; $("finish").disabled=true; $("submit").disabled=true; updateNumbers()
-});
-$("penalties").addEventListener("click",e=>{
-  const b=e.target.closest("[data-pen]");
-  if(!b || !state.running || state.paused)return;
-  const r=currentRules()[+b.dataset.pen];
-  state.penalties.push({id:r.id,name:r.name,amount:Number(r.value)});
-  updateNumbers()
-});
-$("submit").addEventListener("click",()=>{
- const driver=state.drivers.find(d=>d.id===$("driver").value),course=state.courses.find(c=>c.id===$("course").value);
- const pen=state.penalties.reduce((a,p)=>a+p.amount,0);
- state.results.push({driver:driver.name,course:course.name,mode:state.mode,raw:state.rawMs,pen,final:state.mode==="crawling"?state.rawMs:state.rawMs+pen*1000,points:state.mode==="crawling"?pen:0});
- renderResults(); $("submit").disabled=true; $("start").disabled=false;
-});
-$("addDriver").addEventListener("click",()=>{let n=$("newDriver").value.trim(),c=$("newClass").value.trim()||"Open";if(!n)return;state.drivers.push({id:"D"+Date.now(),name:n,className:c});$("newDriver").value="";$("newClass").value="";renderSelects()});
-$("addCourse").addEventListener("click",()=>{let n=$("newCourse").value.trim();if(!n)return;state.courses.push({id:"C"+Date.now(),name:n});$("newCourse").value="";renderSelects()});
-$("saveRules").addEventListener("click",()=>{document.querySelectorAll("[data-rule]").forEach(inp=>{let i=+inp.dataset.rule,v=Math.max(0,Number(inp.value)||0);currentRules()[i].value=v});renderPenalties();updateNumbers();alert("Rules saved for this prototype.")});
+$("start").addEventListener("click",()=>{if(state.running)return;state.running=true;state.paused=false;state.pauseStartedMs=0;state.pausedMs=0;state.startMs=performance.now();state.rawMs=0;state.penalties=[];$("start").disabled=true;$("pause").disabled=false;$("finish").disabled=false;$("submit").disabled=true;$("pause").textContent="PAUSE";tick()});
+$("pause").addEventListener("click",()=>{if(!state.running)return;if(!state.paused){state.paused=true;state.pauseStartedMs=performance.now();cancelAnimationFrame(state.raf);$("pause").textContent="RESUME";$("finish").disabled=true}else{state.paused=false;state.pausedMs+=performance.now()-state.pauseStartedMs;state.pauseStartedMs=0;$("pause").textContent="PAUSE";$("finish").disabled=false;tick()}});
+$("finish").addEventListener("click",()=>{if(!state.running||state.paused)return;state.running=false;cancelAnimationFrame(state.raf);state.rawMs=performance.now()-state.startMs-state.pausedMs;$("timer").textContent=fmt(state.rawMs);$("pause").disabled=true;$("finish").disabled=true;$("submit").disabled=false;updateNumbers()});
+$("reset").addEventListener("click",()=>{state.running=false;state.paused=false;state.pauseStartedMs=0;state.pausedMs=0;cancelAnimationFrame(state.raf);state.rawMs=0;state.penalties=[];$("timer").textContent="00:00.00";$("start").disabled=false;$("pause").disabled=true;$("pause").textContent="PAUSE";$("finish").disabled=true;$("submit").disabled=true;updateNumbers()});
+$("penalties").addEventListener("click",e=>{const b=e.target.closest("[data-pen]");if(!b||!state.running||state.paused)return;const r=currentRules()[+b.dataset.pen];state.penalties.push({id:r.id,name:r.name,amount:Number(r.value)});updateNumbers()});
+$("submit").addEventListener("click",submitRun);
+$("saveEvent").addEventListener("click",saveEvent);
+$("reloadCloud").addEventListener("click",loadCloud);
+$("addDriver").addEventListener("click",addDriverCloud);
+$("addCourse").addEventListener("click",addCourseCloud);
+$("saveRules").addEventListener("click",saveRulesCloud);
 function renderResults(){
  let arr=[...state.results];
  if(state.mode==="crawling")arr.sort((a,b)=>(a.points-b.points)||(a.final-b.final));else arr.sort((a,b)=>a.final-b.final);
  $("resultsBody").innerHTML=arr.map((r,i)=>`<tr><td>${i+1}</td><td>${r.driver}</td><td>${r.course}</td><td>${r.mode==="crawling"?"Crawling":"Time Attack"}</td><td>${fmt(r.raw)}</td><td>${r.mode==="crawling"?r.points+" pts":"+"+r.pen+" sec"}</td><td><b>${fmt(r.final)}</b></td></tr>`).join("");
 }
-document.querySelectorAll(".tab").forEach(btn=>btn.addEventListener("click",()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));btn.classList.add("active");["marshal","admin","results"].forEach(id=>$(id).classList.toggle("hidden",id!==btn.dataset.tab))}));
-renderSelects();updateNumbers();
+document.querySelectorAll(".tab").forEach(btn=>btn.addEventListener("click",()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));btn.classList.add("active");["marshal","admin","results"].forEach(id=>$(id).classList.toggle("hidden",id!==btn.dataset.tab));if(btn.dataset.tab==="results")renderResults()}));
+setMode("crawling");
+loadCloud();
 </script>
 </body>
 </html>

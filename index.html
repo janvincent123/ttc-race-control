@@ -112,9 +112,25 @@ label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}input,se
 
   <section id="results" class="hidden">
     <div class="panel">
-      <h2>Live Results</h2>
-      <div class="sub">Crawling: lowest points first; time breaks equal points. Time Attack: lowest final time first.</div>
-      <div style="overflow:auto;margin-top:12px"><table><thead><tr><th>Rank</th><th>Driver</th><th>Course</th><th>Mode</th><th>Raw</th><th>Penalty</th><th>Result</th></tr></thead><tbody id="resultsBody"></tbody></table></div>
+      <h2>Cumulative Standings</h2>
+      <div class="sub" id="standingsNote">Rock Crawling: lowest cumulative penalty points first; cumulative time breaks equal points. Time Attack: lowest cumulative final time first.</div>
+      <div style="overflow:auto;margin-top:12px">
+        <table>
+          <thead id="standingsHead"></thead>
+          <tbody id="standingsBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Individual Runs</h2>
+      <div class="sub">Every submitted course run is shown here for checking and audit.</div>
+      <div style="overflow:auto;margin-top:12px">
+        <table>
+          <thead><tr><th>Driver</th><th>Course</th><th>Mode</th><th>Raw</th><th>Penalty</th><th>Result</th></tr></thead>
+          <tbody id="resultsBody"></tbody>
+        </table>
+      </div>
     </div>
   </section>
 </div>
@@ -274,9 +290,86 @@ $("addDriver").addEventListener("click",addDriverCloud);
 $("addCourse").addEventListener("click",addCourseCloud);
 $("saveRules").addEventListener("click",saveRulesCloud);
 function renderResults(){
- let arr=[...state.results];
- if(state.mode==="crawling")arr.sort((a,b)=>(a.points-b.points)||(a.final-b.final));else arr.sort((a,b)=>a.final-b.final);
- $("resultsBody").innerHTML=arr.map((r,i)=>`<tr><td>${i+1}</td><td>${r.driver}</td><td>${r.course}</td><td>${r.mode==="crawling"?"Crawling":"Time Attack"}</td><td>${fmt(r.raw)}</td><td>${r.mode==="crawling"?r.points+" pts":"+"+r.pen+" sec"}</td><td><b>${fmt(r.final)}</b></td></tr>`).join("");
+  const mode = state.mode;
+  const arr = state.results.filter(r => r.mode === mode);
+
+  // Build one cumulative row per driver.
+  const groups = new Map();
+  arr.forEach(r => {
+    const key = r.driver;
+    if(!groups.has(key)){
+      groups.set(key,{
+        driver:r.driver,
+        runs:0,
+        points:0,
+        raw:0,
+        final:0,
+        courses:[]
+      });
+    }
+    const g = groups.get(key);
+    g.runs += 1;
+    g.points += Number(r.points || 0);
+    g.raw += Number(r.raw || 0);
+    g.final += Number(r.final || 0);
+    g.courses.push(r.course);
+  });
+
+  let standings = [...groups.values()];
+
+  if(mode === "crawling"){
+    standings.sort((a,b)=>(a.points-b.points)||(a.raw-b.raw));
+    $("standingsHead").innerHTML =
+      "<tr><th>Rank</th><th>Driver</th><th>Courses Completed</th><th>Total Penalty Points</th><th>Cumulative Time</th></tr>";
+    $("standingsNote").textContent =
+      "Rock Crawling: lowest cumulative penalty points first; if points tie, fastest cumulative time ranks higher.";
+    $("standingsBody").innerHTML = standings.map((g,i)=>`
+      <tr>
+        <td><b>${i+1}</b></td>
+        <td><b>${g.driver}</b></td>
+        <td>${g.runs}</td>
+        <td><b>${g.points} pts</b></td>
+        <td>${fmt(g.raw)}</td>
+      </tr>`).join("");
+  }else{
+    standings.sort((a,b)=>a.final-b.final);
+    $("standingsHead").innerHTML =
+      "<tr><th>Rank</th><th>Driver</th><th>Courses Completed</th><th>Cumulative Raw</th><th>Cumulative Penalty</th><th>Cumulative Final</th></tr>";
+    $("standingsNote").textContent =
+      "Time Attack: cumulative final time = cumulative raw time + cumulative penalty time. Lowest cumulative final time ranks higher.";
+    $("standingsBody").innerHTML = standings.map((g,i)=>{
+      const penaltySeconds = g.final > g.raw ? Math.round((g.final-g.raw)/1000) : 0;
+      return `
+      <tr>
+        <td><b>${i+1}</b></td>
+        <td><b>${g.driver}</b></td>
+        <td>${g.runs}</td>
+        <td>${fmt(g.raw)}</td>
+        <td>+${penaltySeconds} sec</td>
+        <td><b>${fmt(g.final)}</b></td>
+      </tr>`;
+    }).join("");
+  }
+
+  // Keep the individual run list for verification.
+  let runs = [...arr];
+  if(mode==="crawling") runs.sort((a,b)=>(a.points-b.points)||(a.raw-b.raw));
+  else runs.sort((a,b)=>a.final-b.final);
+
+  $("resultsBody").innerHTML = runs.map(r=>`
+    <tr>
+      <td>${r.driver}</td>
+      <td>${r.course}</td>
+      <td>${r.mode==="crawling"?"Crawling":"Time Attack"}</td>
+      <td>${fmt(r.raw)}</td>
+      <td>${r.mode==="crawling"?r.points+" pts":"+"+r.pen+" sec"}</td>
+      <td><b>${fmt(r.final)}</b></td>
+    </tr>`).join("");
+
+  if(!standings.length){
+    $("standingsBody").innerHTML =
+      '<tr><td colspan="6" class="muted">No submitted runs for this mode yet.</td></tr>';
+  }
 }
 document.querySelectorAll(".tab").forEach(btn=>btn.addEventListener("click",()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));btn.classList.add("active");["marshal","admin","results"].forEach(id=>$(id).classList.toggle("hidden",id!==btn.dataset.tab));if(btn.dataset.tab==="results")renderResults()}));
 setMode("crawling");
